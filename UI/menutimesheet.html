@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timesheet</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <div class="page-container">
+
+    <!-- Header -->
+    <header class="app-header flex-between">
+      <button class="btn btn-secondary small" onclick="goToMenu()">
+        <img src="css/svg-white/arrow-left-circle.svg" alt="Back" style="height:18px;">
+      </button>
+      <h2>Timesheet</h2>
+      <button class="btn btn-secondary small" onclick="loadTimesheet()">
+        <img src="css/svg-white/repeat.svg" alt="Refresh" style="height:18px;">
+      </button>
+    </header>
+
+    <!-- Table header -->
+    <div class="timesheet-header">
+      <div class="cell">Order</div>
+      <div class="cell flex-2">Operation</div>
+      <div class="cell">Check In</div>
+      <div class="cell">Check Out</div>
+      <div class="cell">Workcenter</div>
+      <div class="cell actions">Actions</div>
+    </div>
+
+    <!-- Scrollable list -->
+    <div class="gallery-container">
+      <div id="gallery" class="gallery"></div>
+    </div>
+  </div>
+
+  <script>
+    function goToMenu() {
+      window.location.href = "mainmenu";
+    }
+
+    const datakaryawan = JSON.parse(sessionStorage.getItem("datakaryawan"));
+    const serialnumber = datakaryawan?.snssb;
+
+    async function loadTimesheet() {
+      if (!serialnumber) {
+        console.error("SN Karyawan tidak ditemukan");
+        return;
+      }
+      try {
+        const res = await fetch(`/timesheet/getsn/${serialnumber}`);
+        const data = await res.json();
+        renderTimesheet(data);
+      } catch (err) {
+        console.error("Gagal load timesheet:", err);
+      }
+    }
+
+    function renderTimesheet(data) {
+  const gallery = document.getElementById("gallery");
+  gallery.innerHTML = "";
+
+  data.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "timesheet-row";
+
+    // simpan semua data ke dataset
+    row.dataset.tsnumber = item.tsnumber;
+    row.dataset.serialnumber = item.serialnumber;
+    row.dataset.seq = item.seq;
+    row.dataset.productionOrder = item.production_order;
+    row.dataset.fullName = item.full_name;
+    row.dataset.operationText = item.operation_text;
+    row.dataset.dateCheckin = item.date_checkin;
+    row.dataset.dateCheckout = item.date_checkout;
+    row.dataset.hourCheckin = item.hour_checkin;
+    row.dataset.hourCheckout = item.hour_checkout;
+    row.dataset.workcentercode = item.workcentercode;
+    row.dataset.workcenterdescription = item.workcenterdescription;
+
+    row.innerHTML = `
+      <div>${item.production_order}</div>
+      <div class="operation">${item.operation_text}</div>
+      <div class="datetime-cell">
+        <div class="date">${item.date_checkin || ""}</div>
+        <div class="time">${item.hour_checkin || ""}</div>
+      </div>
+      <div class="datetime-cell">
+        <div class="date">${item.date_checkout || ""}</div>
+        <div class="time">${item.hour_checkout || ""}</div>
+      </div>
+      <div>${item.workcenterdescription}</div>
+      <div class="actions">
+        ${item.hour_checkout 
+          ? `<button class="btn btn-primary btn-row restart">Restart</button>`
+          : `<button class="btn btn-danger btn-row stop">Stop</button>`}
+      </div>
+    `;
+
+    gallery.appendChild(row);
+  });
+}
+
+
+    // Event delegation untuk tombol Stop & Restart
+    document.getElementById("gallery").addEventListener("click", async (e) => {
+  const row = e.target.closest(".timesheet-row");
+  if (!row) return;
+
+  // STOP
+  if (e.target.classList.contains("stop")) {
+    try {
+      const res = await fetch("/timesheet/checkoutid/", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tsnumber: row.dataset.tsnumber })
+      });
+      if (!res.ok) throw new Error("Gagal checkout");
+      await res.json();
+      loadTimesheet();
+    } catch (err) {
+      console.error("Error stop:", err);
+    }
+  }
+
+  // RESTART
+  if (e.target.classList.contains("restart")) {
+    try {
+      const body = {
+        tsnumber: row.dataset.tsnumber,
+        production_order: row.dataset.productionOrder,
+        operation_text: row.dataset.operationText,
+        operation_no: row.dataset.seq,
+        serialnumber: row.dataset.serialnumber,
+        full_name: row.dataset.fullName,
+        workcentercode: row.dataset.workcentercode,
+        workcenterdescription: row.dataset.workcenterdescription
+      };
+      const res = await fetch("/timesheet/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error("Gagal restart");
+      await res.json();
+      loadTimesheet();
+    } catch (err) {
+      console.error("Error restart:", err);
+    }
+  }
+});
+
+
+    // load pertama kali
+    loadTimesheet();
+  </script>
+</body>
+</html>

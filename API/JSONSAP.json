@@ -1,0 +1,32 @@
+{
+  "ZTIMESHEETID": "537",
+  "PERNR": "00016502", //personel number 16502//
+  "RUECK": "6719456", //* confirmationnumber*//
+  "ZCONF_TYPE": "RG", //confirmationtype
+  "ARBPL": "M5153ASY", //workcenter
+  "LSTAR": "", //activitytype
+  "ISDD": "20251211",
+  "ISDZ": "093800",
+  "IEDD": "20251211",
+  "IEDZ": "105900",
+  "WERKS": "5100",
+  "AUERU": "",
+  "ZBARCODEID": "11515343"
+}
+
+{
+  "ZTIMESHEETID": "539",
+  "PERNR": "00016502",
+  "RUECK": "",
+  "ZCONF_TYPE": "",
+  "ARBPL": "M5153ASY",
+  "LSTAR": "1770",
+  "ISDD": "20250918",
+  "ISDZ": "153800",
+  "IEDD": "20250918",
+  "IEDZ": "205900",
+  "WERKS": "5153",
+  "AUERU": "",
+  "ZBARCODEID": "1575343"
+}
+
