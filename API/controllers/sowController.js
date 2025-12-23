@@ -1,4 +1,4 @@
-const db = require("../db");
+const db = global.pool || require("../db");
 
 // GET all
 exports.getAll = async (req, res) => {
@@ -669,25 +669,32 @@ exports.getcsvbyid = async (req, res) => {
 // GET all parts
 exports.getAllParts = async (req, res) => {
   try {
-    console.log('getAllParts called'); // Tambah ini
+    console.log('📋 getAllParts called');
     
     const result = await db.query(`
       SELECT 
         p.*,
         COUNT(o.operation_id) as total_operations,
-        SUM(o.planhours) as total_hours
+        COALESCE(SUM(o.planhours), 0) as total_hours
       FROM parts p
       LEFT JOIN operations o ON p.part_id = o.part_id
       GROUP BY p.part_id
       ORDER BY p.partnumber
     `);
     
-    console.log('Query result:', result.rows.length, 'rows'); // Tambah ini
+    console.log(`✅ Found ${result.rows.length} parts`);
     
-    res.json(result.rows);
+    res.json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows
+    });
   } catch (err) {
-    console.error('Error in getAllParts:', err); // Tambah ini
-    res.status(500).json({ error: err.message });
+    console.error('❌ Error in getAllParts:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
   }
 };
 

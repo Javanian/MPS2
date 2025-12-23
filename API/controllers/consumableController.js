@@ -1,4 +1,4 @@
-const db = require("../db");
+const db = global.pool || require("../db");
 
 exports.getAll = async (req, res) => {
   try {

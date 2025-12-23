@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: timesheet-db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+      TZ: ${TIMEZONE}
+      PGTZ: ${TIMEZONE}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+      - ./database/init_database.sql:/docker-entrypoint-initdb.d/01-init.sql:ro  # ← TAMBAH INI
+      - ./database/migrate_sow_to_parts.sql:/docker-entrypoint-initdb.d/02-migrate.sql:ro  # ← TAMBAH INI (optional)
+    ports:
+      - "5433:5432"       # ← Host:Container (5433 di Windows, 5432 di Docker)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - timesheet-network
+
+  api:
+    build: ./API
+    container_name: timesheet-api
+    expose:
+      - "3001"
+    environment:
+      - DB_HOST=db       
+      - DB_PORT=5432      
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - PORT=${PORT}
+      - NODE_ENV=${NODE_ENV}
+      - PLANTSSB=${PLANTSSB}
+      - TIMEZONE=${TIMEZONE}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - TZ=${TIMEZONE}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - timesheet-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: timesheet-nginx
+    environment:
+      - TZ=${TIMEZONE}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./UI:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - timesheet-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  timesheet-network:
+    driver: bridge

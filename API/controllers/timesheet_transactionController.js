@@ -1,12 +1,17 @@
-require('dotenv').config();
+const db = global.pool || require("../db");
+// ============================================
+// DEPENDENCIES
+// ============================================
 const { Parser } = require('json2csv');
 const ExcelJS = require('exceljs');
-const db = require("../db");
+
 
 // Configuration from environment variables
-const PLANT_SSB = process.env.PLANT_SSB ;
-const TIMEZONE = process.env.TIMEZONE ;
-
+const PLANT_SSB = process.env.PLANT_SSB || '5153';  // ✅ Nama var sesuai .env
+const TIMEZONE = process.env.TIMEZONE || 'Asia/Makassar';  // ✅ Fallback default
+console.log('⚙️ Timesheet Controller Config:');
+console.log('   Plant:', PLANT_SSB);
+console.log('   Timezone:', TIMEZONE);
 // ============ HELPER FUNCTIONS ============
 
 /**

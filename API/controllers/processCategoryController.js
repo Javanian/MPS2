@@ -1,4 +1,4 @@
-const pool = require('../db');
+const db = global.pool || require("../db");
 
 exports.getAll = async (req, res) => {
   const result = await pool.query('SELECT * FROM process_category ORDER BY id_process');
