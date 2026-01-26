@@ -51,6 +51,7 @@ const data = await response.json();
 
       const rowData = {
         order: item.order_no,
+        ssbr_id: item.ssbr_id,
         operationtext: item.operationtext,
         operation_no: item.operation_no,
         planhours: item.planhours,
@@ -77,11 +78,16 @@ const data = await response.json();
       wctBox.classList.add("textbox", "wct");
       wctBox.textContent = rowData.workcenter;
 
-      container.appendChild(orderBox);
-      container.appendChild(actBox);
-      container.appendChild(seqBox);
-      container.appendChild(hrsBox);
-      container.appendChild(wctBox);
+const identBox = document.createElement("div");
+identBox.classList.add("textbox", "ident");
+identBox.textContent = rowData.ssbr_id;
+
+container.appendChild(orderBox);
+container.appendChild(identBox);
+container.appendChild(actBox);
+container.appendChild(seqBox);
+container.appendChild(hrsBox);
+container.appendChild(wctBox);
 
       // klik row → simpan ke variable
       container.addEventListener("click", () => {
@@ -133,6 +139,7 @@ const data = await response.json();
 
       const rowData = {
         order: item.order_no,
+        ssbr_id: item.ssbr_id,
         operationtext: item.operationtext,
         operation_no: item.operation_no,
         planhours: item.planhours,
@@ -159,11 +166,16 @@ const data = await response.json();
       wctBox.classList.add("textbox", "wct");
       wctBox.textContent = rowData.workcenter;
 
-      container.appendChild(orderBox);
-      container.appendChild(actBox);
-      container.appendChild(seqBox);
-      container.appendChild(hrsBox);
-      container.appendChild(wctBox);
+      const identBox = document.createElement("div");
+identBox.classList.add("textbox", "ident");
+identBox.textContent = rowData.ssbr_id;
+
+container.appendChild(orderBox);
+container.appendChild(identBox);
+container.appendChild(actBox);
+container.appendChild(seqBox);
+container.appendChild(hrsBox);
+container.appendChild(wctBox);
 
       // klik row → simpan ke variable
       container.addEventListener("click", () => {

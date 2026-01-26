@@ -13,6 +13,15 @@
     <header class="app-header flex-between">
       <button class="btn btn-secondary small" onclick="goToMenu()">Back</button>
       <h2>Select Machine</h2>
+      
+      <div class="switch-wrapper">
+  <span id="wcModeLabel">Reguler</span>
+  <label class="switch">
+    <input type="checkbox" id="wcModeToggle">
+    <span class="slider"></span>
+  </label>
+</div>
+
       <button class="btn btn-secondary small" onclick="loadMachines()">Refresh</button>
     </header>
 
@@ -28,6 +37,28 @@
   </div>
 
   <script>
+
+     /* ===== WORKCENTER MODE (REGULER / OVERTIME) ===== */
+  const wcModeToggle = document.getElementById("wcModeToggle");
+  const wcModeLabel  = document.getElementById("wcModeLabel");
+
+  let wcMode = sessionStorage.getItem("wcMode") || "reguler";
+
+  function setWcMode(mode) {
+    wcMode = mode;
+    sessionStorage.setItem("wcMode", mode);
+    wcModeLabel.textContent = mode === "overtime" ? "Overtime" : "Reguler";
+  }
+
+  wcModeToggle.checked = wcMode === "overtime";
+  setWcMode(wcMode);
+
+  wcModeToggle.addEventListener("change", () => {
+    setWcMode(wcModeToggle.checked ? "overtime" : "reguler");
+    renderMachines(datamesin); // 🔥 refresh card UI
+  });
+
+  
     function goToMenu() {
       window.location.href = "mainmenu";
     }
@@ -45,62 +76,81 @@
     }
 
     function renderMachines(data) {
-      const gallery = document.getElementById("gallerymesin");
-      gallery.innerHTML = "";
+  const gallery = document.getElementById("gallerymesin");
+  gallery.innerHTML = "";
 
-      data.forEach(item => {
-        const card = document.createElement("div");
-        card.className = "machine-card";
-        card.dataset.machineid = item.machineid;
-        card.dataset.workcenter = item.workcenternew;
-        card.dataset.machinename = item.workcenter_description;
-        card.dataset.groupname = item.groupname;
+  data.forEach(item => {
 
-        card.innerHTML = `
-  <div class="title">${item.workcenter_description}</div>
-  <div class="detail"><span class="label">ID:</span> <span class="value">${item.machineid}</span></div>
-  <div class="detail"><span class="label">Group:</span> <span class="value">${item.groupname}</span></div>
-  <div class="detail"><span class="label">Workcenter:</span> <span class="value">${item.workcenternew}</span></div>
-`;
+    // ✅ item SUDAH VALID DI SINI
+    const workcenterText =
+      wcMode === "overtime"
+        ? item.workcenterot
+        : item.workcenternew;
 
+    const overtimeClass = wcMode === "overtime" ? "overtime" : "";
+    const overtimeBadge = wcMode === "overtime"
+      ? `<div class="ot-badge">OT</div>`
+      : "";
 
-        card.addEventListener("click", async () => {
-          try {
-            const datakaryawan = JSON.parse(sessionStorage.getItem("datakaryawan"));
-            const nfcid = datakaryawan.nfcid;
+    const card = document.createElement("div");
+    card.className = `machine-card ${overtimeClass}`;
+    card.dataset.machineid = item.machineid;
+    card.dataset.machinename = item.workcenter_description;
+    card.dataset.groupname = item.groupname;
 
-            // update mesin untuk user
-            const response = await fetch("/usernfc/update/", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                serialnumber: datakaryawan.snssb,
-                machineid: item.machineid,
-                machinename: item.workcenter_description,
-                workcenter: item.workcenternew
-              })
-            });
-            if (!response.ok) throw new Error("Gagal update mesin");
+    card.innerHTML = `
+      ${overtimeBadge}
+      <div class="title">${item.workcenter_description}</div>
+      <div class="detail"><span class="label">ID:</span> <span class="value">${item.machineid}</span></div>
+      <div class="detail"><span class="label">Group:</span> <span class="value">${item.groupname}</span></div>
+      <div class="detail"><span class="label">Workcenter:</span> <span class="value">${workcenterText || "-"}</span></div>
+    `;
 
-            alert("Update mesin berhasil! ✅");
+    card.addEventListener("click", async () => {
+      try {
+        const datakaryawan = JSON.parse(sessionStorage.getItem("datakaryawan"));
+        const nfcid = datakaryawan.nfcid;
 
-            // ambil ulang data user
-            const res = await fetch(`/usernfc/nfcid/${nfcid}`);
-            if (res.ok) {
-              const updatedUser = await res.json();
-              sessionStorage.setItem("datakaryawan", JSON.stringify(updatedUser));
-            }
+        const selectedWorkcenter =
+          wcMode === "overtime"
+            ? item.workcenterot
+            : item.workcenternew;
 
-            window.location.href = "mainmenu";
-          } catch (err) {
-            console.error(err);
-            alert("Update mesin gagal: " + err.message);
-          }
+        if (wcMode === "overtime" && !item.workcenterot) {
+          alert("Workcenter Overtime tidak tersedia");
+          return;
+        }
+
+        const response = await fetch("/usernfc/update/", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serialnumber: datakaryawan.snssb,
+            machineid: item.machineid,
+            machinename: item.workcenter_description,
+            workcenter: selectedWorkcenter
+          })
         });
 
-        gallery.appendChild(card);
-      });
-    }
+        if (!response.ok) throw new Error("Gagal update mesin");
+
+        const res = await fetch(`/usernfc/nfcid/${nfcid}`);
+        if (res.ok) {
+          const updatedUser = await res.json();
+          sessionStorage.setItem("datakaryawan", JSON.stringify(updatedUser));
+        }
+
+        window.location.href = "mainmenu";
+      } catch (err) {
+        console.error(err);
+        alert("Update mesin gagal: " + err.message);
+      }
+    });
+
+    gallery.appendChild(card);
+  });
+}
+
 
     // Search filter
     document.getElementById("searchInput").addEventListener("input", function () {

@@ -46,6 +46,7 @@ async function postdata() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           production_order: selectedactivity.order,
+          ssbr_ident: selectedactivity.ssbr_id,
           serialnumber: datakaryawan.snssb,
           full_name: datakaryawan.full_name,
           operation_no: selectedactivity.operation_no,
@@ -75,6 +76,7 @@ async function postdata() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           production_order: selectedactivity.order,
+          ssbr_ident: selectedactivity.ssbr_id,
           serialnumber: datakaryawan.snssb,
           full_name: datakaryawan.full_name,
           operation_no: selectedactivity.operation_no,

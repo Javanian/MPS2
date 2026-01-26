@@ -18,6 +18,8 @@ docker-compose up -d --build api
 
 # Rebuild semua
 docker-compose up -d --build
+sudo docker compose up -d --build
+
 
 # 1. Edit file
 notepad nginx/nginx.conf

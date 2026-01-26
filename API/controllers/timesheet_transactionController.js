@@ -232,6 +232,7 @@ exports.create = async (req, res) => {
   try {
     const {
       production_order,
+      ssbr_ident,
       serialnumber,
       full_name,
       operation_no,
@@ -249,16 +250,18 @@ exports.create = async (req, res) => {
     const longdate_checkin = getCurrentDateTime();
     const date_checkin = formatDate(longdate_checkin);
     const hour_checkin = formatTime(longdate_checkin);
+    const PLANT_SSB = process.env.PLANT_SSB;
 
     const result = await db.query(
       `INSERT INTO timesheet_transaction 
-        (production_order, serialnumber, full_name, seq, operation_text,
+        (production_order, ssbr_ident, serialnumber, full_name, seq, operation_text,
          workcentercode, workcenterdescription, date_checkin, longdate_checkin,
          hour_checkin, plant, activitytype)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
        RETURNING *`,
       [
         production_order,
+        ssbr_ident,
         serialnumber,
         full_name,
         operation_no,
@@ -279,7 +282,7 @@ exports.create = async (req, res) => {
     res.status(500).json({ error: 'Error inserting data: ' + err.message });
   }
 };
-
+ 
 /**
  * UPDATE timesheet - checkout by serial number
  */
@@ -616,4 +619,70 @@ exports.getcsv = (req, res) => generateExport(req, res, 'csv');
 /**
  * Export timesheet data as XLSX
  */
-exports.getxlsx = (req, res) => generateExport(req, res, 'xlsx');
+
+
+/* UPDATE FLEXIBLE*/
+exports.partialUpdate = async (req, res) => {
+  const { tsnumber } = req.params;
+  const payload = req.body;
+
+  if (!payload || Object.keys(payload).length === 0) {
+    return res.status(400).json({ message: "No data to update" });
+  }
+
+  const allowedFields = [
+    "note",
+    "hour_checkin",
+    "hour_checkout",
+    "date_checkin",
+    "date_checkout",
+    "status_flag",
+    "std_foreman_hours",
+    "planhours",
+    "workcentercode",
+    "workcenterdescription"
+  ];
+
+  const setClauses = [];
+  const values = [];
+  let idx = 1;
+
+  for (const field of allowedFields) {
+    if (payload[field] !== undefined) {
+      setClauses.push(`${field} = $${idx++}`);
+      values.push(payload[field]);
+    }
+  }
+
+  if (setClauses.length === 0) {
+    return res.status(400).json({ message: "No valid fields to update" });
+  }
+
+  values.push(tsnumber);
+
+  try {
+    const result = await db.query(
+      `
+      UPDATE timesheet_transaction
+      SET ${setClauses.join(", ")}
+      WHERE tsnumber = $${idx}
+      RETURNING *
+      `,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Timesheet not found" });
+    }
+
+    res.json({
+      message: "Timesheet updated",
+      data: result.rows[0]
+    });
+  } catch (err) {
+    console.error("partialUpdate error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+

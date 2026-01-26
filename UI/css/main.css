@@ -316,7 +316,7 @@ input:checked + .slider:before {
 /* ===== GALLERY HEADER ===== */
 .gallery-header {
   display: grid;
-  grid-template-columns: 1fr 2fr 0.5fr 0.5fr 1fr;
+  grid-template-columns: 1fr 1fr 2fr 0.5fr 0.5fr 1fr;
   font-weight: bold;
   padding: 8px;
   gap: 8px;
@@ -343,7 +343,7 @@ input:checked + .slider:before {
 .gallery .item {
   display: grid;
     box-sizing: border-box;
-  grid-template-columns: 1fr 2fr 0.5fr 0.5fr 1fr;
+  grid-template-columns: 1fr 1fr 2fr 0.5fr 0.5fr 1fr;
   gap: 8px;
   padding: 8px;
   border: 1px solid #ddd;
@@ -682,4 +682,3 @@ input:checked + .slider:before {
   align-self: flex-end;
   flex-shrink: 0;
 }
-

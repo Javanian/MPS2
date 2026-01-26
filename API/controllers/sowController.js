@@ -24,7 +24,7 @@ exports.getById = async (req, res) => {
 exports.get2data = async (req, res) => {
   try {
     const { search } = req.query;
-    
+
     let query = 'SELECT * FROM sow WHERE 1=1';
     const params = [];
 
@@ -36,47 +36,43 @@ exports.get2data = async (req, res) => {
     query += ' ORDER BY operation_no ASC';
 
     const result = await db.query(query, params);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Data not found' });
     }
 
     const columns = Object.keys(result.rows[0]);
 
-    // Buat header CSV
-    const csvHeader = columns.join(",") + "\n";
+    // HEADER pakai titik koma
+    const csvHeader = columns.join(";") + "\n";
 
-    // Convert data ke format CSV
+    // DATA pakai titik koma
     const csvData = result.rows
-      .map((row) => {
-        return columns
-          .map((col) => {
+      .map(row =>
+        columns
+          .map(col => {
             let value = row[col];
-            if (value === null || value === undefined) {
-              value = "";
-            }
-            if (
-              typeof value === "string" &&
-              (value.includes(",") || value.includes('"') || value.includes("\n"))
-            ) {
-              value = '"' + value.replace(/"/g, '""') + '"';
-            }
-            return value;
+            if (value === null || value === undefined) value = "";
+            value = String(value).replace(/"/g, '""');
+            return `"${value}"`;
           })
-          .join(";");
-      })
+          .join(";")
+      )
       .join("\n");
 
-    // PERBAIKAN: Gunakan 'search' bukan 'order_no'
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename="sow_${search || 'all'}.csv"`);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="sow_${search || "all"}.csv"`
+    );
 
-    // Kirim CSV data
     res.send(csvHeader + csvData);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // Endpoint baru khusus untuk JSON
 exports.getDataJSON = async (req, res) => {
