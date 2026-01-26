@@ -1,189 +1,194 @@
 import os
-import psycopg2
+import asyncio
+import threading
+from collections import deque
+from datetime import datetime
+
 import pandas as pd
-import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
-from contextlib import contextmanager
+import asyncpg
 
-# ---------------- CONFIG ----------------
-st.set_page_config(
-    page_title="SPC Dashboard",
-    layout="wide",
-)
+# ===================== CONFIG =====================
+REFRESH_DB_SECONDS = 10
+UI_REFRESH_MS = 1000
+MAX_POINTS = 1000
 
-REFRESH_SEC = 5
+# ===================== SHARED STATE =====================
+DATA_BUFFER = deque(maxlen=MAX_POINTS)
+DATA_LOCK = threading.Lock()
 
-# ---------------- DB CONNECTION ----------------
-@contextmanager
-def get_db_connection():
-    conn = psycopg2.connect(
+# ===================== ASYNC DB =====================
+async def create_pool():
+    return await asyncpg.create_pool(
         host=os.getenv("DB_HOST", "localhost"),
-        port=os.getenv("DB_PORT", "5432"),
-        dbname=os.getenv("DB_NAME", "ptssb"),
+        port=int(os.getenv("DB_PORT", 5432)),
+        database=os.getenv("DB_NAME", "manufacturing"),
         user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "@dminta9"),
+        password=os.getenv("DB_PASSWORD", ""),
+        min_size=1,
+        max_size=3
     )
-    try:
-        yield conn
-    finally:
-        conn.close()
 
-# ---------------- DATA QUERY ----------------
-@st.cache_data(ttl=REFRESH_SEC)
-def load_data():
+async def fetch_spc_data(pool):
     query = """
-        SELECT
-            pcd.createddate,
-            pcd.machineid,
-            pci.parameter_name,
-            pci.value::float AS value
-        FROM processcontroldata_item pci
-        JOIN processcontroldata pcd
-            ON pci.id_processcontroldata = pcd.id_processcontroldata
-        WHERE
-            pci.isnumber = true
-            AND pci.value ~ '^[0-9]+\.?[0-9]*$'
-            AND pci.value != ''
-        ORDER BY pcd.createddate DESC
-        LIMIT 500
+    SELECT
+        pcd.createddate,
+        pcd.machineid,
+        pcd.validation_status,
+        pp.parameter_name,
+        pci.value::float AS numeric_value
+    FROM processcontroldata pcd
+    JOIN processcontroldata_item pci
+        ON pcd.id_processcontroldata = pci.id_processcontroldata
+    JOIN process_parameter pp
+        ON pci.id_parameter = pp.id_parameter
+    WHERE
+        pci.isnumber = true
+        AND pci.value ~ '^[0-9.]+$'
+        AND pcd.createddate >= NOW() - INTERVAL '1 hour'
+    ORDER BY pcd.createddate DESC
+    LIMIT 500;
     """
-    with get_db_connection() as conn:
-        return pd.read_sql(query, conn)
+    async with pool.acquire() as conn:
+        return await conn.fetch(query)
 
-# ---------------- UI ----------------
-st.title("📊 SPC Realtime Dashboard")
+# ===================== BACKGROUND WORKER =====================
+async def spc_background_worker():
+    pool = await create_pool()
 
-# Auto-refresh toggle
-col1, col2 = st.columns([3, 1])
-with col2:
-    auto_refresh = st.checkbox("Auto Refresh", value=True)
+    while True:
+        try:
+            rows = await fetch_spc_data(pool)
 
-df = load_data()
+            with DATA_LOCK:
+                DATA_BUFFER.clear()
+                for r in rows:
+                    DATA_BUFFER.append(dict(r))
 
-if df.empty:
-    st.warning("Belum ada data numerik")
-    st.stop()
+        except Exception as e:
+            print("Worker error:", e)
 
-# Filters
-col1, col2 = st.columns(2)
-with col1:
-    machine = st.selectbox(
-        "Machine",
-        sorted(df["machineid"].dropna().unique())
+        await asyncio.sleep(REFRESH_DB_SECONDS)
+
+def start_worker_once():
+    if "worker_started" not in st.session_state:
+        st.session_state.worker_started = True
+
+        def runner():
+            asyncio.run(spc_background_worker())
+
+        threading.Thread(
+            target=runner,
+            daemon=True
+        ).start()
+
+# ===================== DATA ACCESS =====================
+def get_realtime_df():
+    with DATA_LOCK:
+        if not DATA_BUFFER:
+            return pd.DataFrame()
+        return pd.DataFrame(list(DATA_BUFFER))
+
+# ===================== SPC FIGURE =====================
+def init_spc_figure():
+    fig = go.Figure()
+    fig.add_scatter(
+        x=[],
+        y=[],
+        mode="lines+markers",
+        name="SPC Value",
+        line=dict(width=2)
+    )
+    return fig
+
+# ===================== STREAMLIT APP =====================
+def main():
+    st.set_page_config(
+        page_title="Realtime SPC Dashboard",
+        layout="wide"
     )
 
-with col2:
-    parameter = st.selectbox(
-        "Parameter",
-        sorted(df["parameter_name"].unique())
+    start_worker_once()
+
+    st.title("📈 Realtime SPC Dashboard (Async)")
+    st.caption("True realtime • No reload • Async background worker")
+
+    # ---------- Sidebar ----------
+    with st.sidebar:
+        st.header("Filter")
+        df = get_realtime_df()
+        param_list = sorted(df["parameter_name"].unique()) if not df.empty else []
+        selected_param = st.selectbox(
+            "Parameter",
+            param_list
+        )
+
+        machine_list = sorted(df["machineid"].dropna().unique()) if not df.empty else []
+        selected_machine = st.selectbox(
+            "Machine",
+            ["All"] + machine_list
+        )
+
+        st.markdown("---")
+        st.caption(f"Last UI refresh: {datetime.now().strftime('%H:%M:%S')}")
+
+    # ---------- Data Filter ----------
+    if df.empty:
+        st.warning("Waiting for realtime data...")
+        st.stop()
+
+    if selected_param:
+        df = df[df["parameter_name"] == selected_param]
+
+    if selected_machine != "All":
+        df = df[df["machineid"] == selected_machine]
+
+    df = df.sort_values("createddate")
+
+    # ---------- SPC Chart ----------
+    if "spc_fig" not in st.session_state:
+        st.session_state.spc_fig = init_spc_figure()
+
+    fig = st.session_state.spc_fig
+
+    if not df.empty:
+        mean_val = df["numeric_value"].mean()
+        std_val = df["numeric_value"].std()
+
+        fig.data[0].x = df["createddate"]
+        fig.data[0].y = df["numeric_value"]
+
+        fig.layout.shapes = []
+        fig.add_hline(y=mean_val, line_dash="dash", line_color="green")
+        fig.add_hline(y=mean_val + 3 * std_val, line_dash="dot", line_color="red")
+        fig.add_hline(y=mean_val - 3 * std_val, line_dash="dot", line_color="red")
+
+    fig.update_layout(
+        height=500,
+        xaxis_title="Time",
+        yaxis_title="Value",
+        hovermode="x unified"
     )
 
-df_f = df[
-    (df["machineid"] == machine) &
-    (df["parameter_name"] == parameter)
-].sort_values("createddate").reset_index(drop=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-if len(df_f) < 3:
-    st.error("Data terlalu sedikit untuk SPC analysis")
-    st.stop()
+    # ---------- Stats ----------
+    if not df.empty:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Mean", f"{mean_val:.3f}")
+        col2.metric("Std Dev", f"{std_val:.3f}")
+        col3.metric("Samples", len(df))
 
-# ---------------- SPC CALC (Proper Subgroups) ----------------
-subgroup_size = 5
-n_subgroups = len(df_f) // subgroup_size
+        out_control = df[
+            (df["numeric_value"] > mean_val + 3 * std_val) |
+            (df["numeric_value"] < mean_val - 3 * std_val)
+        ]
+        col4.metric("Out of Control", len(out_control))
 
-if n_subgroups == 0:
-    st.warning(f"Data kurang dari {subgroup_size} untuk subgroup analysis")
-    # Fallback to individual chart
-    mean = df_f["value"].mean()
-    std = df_f["value"].std()
-    ucl = mean + 3 * std
-    lcl = mean - 3 * std
-    use_subgroups = False
-else:
-    # Calculate subgroups
-    subgroups = []
-    for i in range(n_subgroups):
-        start = i * subgroup_size
-        end = start + subgroup_size
-        sg = df_f.iloc[start:end]["value"].values
-        subgroups.append({
-            'x_bar': np.mean(sg),
-            'r': np.max(sg) - np.min(sg)
-        })
-    
-    sg_df = pd.DataFrame(subgroups)
-    x_double_bar = sg_df['x_bar'].mean()
-    r_bar = sg_df['r'].mean()
-    
-    # Constants for n=5
-    A2 = 0.577
-    ucl = x_double_bar + A2 * r_bar
-    lcl = x_double_bar - A2 * r_bar
-    mean = x_double_bar
-    use_subgroups = True
+    # ---------- UI Refresh ----------
+    st.autorefresh(interval=UI_REFRESH_MS, key="ui_refresh")
 
-# ---------------- PLOT ----------------
-fig = go.Figure()
-
-fig.add_trace(go.Scatter(
-    x=df_f["createddate"],
-    y=df_f["value"],
-    mode="lines+markers",
-    name="Value",
-    marker=dict(size=6),
-    line=dict(width=2)
-))
-
-fig.add_hline(y=mean, line_dash="solid", line_color="green", 
-              annotation_text=f"CL={mean:.2f}")
-fig.add_hline(y=ucl, line_dash="dash", line_color="red", 
-              annotation_text=f"UCL={ucl:.2f}")
-fig.add_hline(y=lcl, line_dash="dash", line_color="red", 
-              annotation_text=f"LCL={lcl:.2f}")
-
-fig.update_layout(
-    title=f"SPC Chart - {machine} / {parameter}",
-    xaxis_title="Time",
-    yaxis_title="Value",
-    template="plotly_white",
-    height=500
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# ---------------- METRICS ----------------
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.metric("Mean", f"{mean:.2f}")
-
-with col2:
-    std_val = df_f["value"].std()
-    st.metric("Std Dev", f"{std_val:.2f}")
-
-with col3:
-    ooc = len(df_f[(df_f["value"] > ucl) | (df_f["value"] < lcl)])
-    st.metric("Out of Control", ooc)
-
-with col4:
-    st.metric("Total Points", len(df_f))
-
-# ---------------- STATUS ----------------
-if ooc > 0:
-    st.error(f"⚠️ Process OUT OF CONTROL - {ooc} points exceeded limits")
-else:
-    st.success("✅ Process IN CONTROL")
-
-# ---------------- INFO ----------------
-st.info(f"""
-**Method:** {'X-bar Chart (Subgroups)' if use_subgroups else 'Individual Chart (3-sigma)'}  
-**Last Update:** {df_f['createddate'].max()}  
-**Data Points:** {len(df_f)}
-""")
-
-# ---------------- AUTO REFRESH ----------------
-if auto_refresh:
-    import time
-    time.sleep(REFRESH_SEC)
-    st.rerun()
+# ===================== ENTRY =====================
+if __name__ == "__main__":
+    main()
