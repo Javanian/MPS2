@@ -67,6 +67,27 @@ services:
     networks:
       - timesheet-network
 
+  spc_dashboard:
+    build: ./spc-dashboard
+    container_name: spc-dashboard
+    expose:
+      - "8501"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - TIMEZONE=${TIMEZONE}
+      - TZ=${TIMEZONE}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - timesheet-network
+
+
 volumes:
   postgres_data:
     driver: local
