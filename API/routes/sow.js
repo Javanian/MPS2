@@ -26,7 +26,7 @@ router.delete("/operations/:id", controller.deleteOperation);
 // ============================================
 router.post("/sow", controller.createPartWithOperations);
 router.put("/sow/:id", controller.updatePartWithOperations);
-router.get("/sow/:id", controller.getCompleteSOW);
+router.get("/sow/complete/:id", controller.getCompleteSOW);
 
 // ============================================
 // REPORTS & STATISTICS ROUTES
