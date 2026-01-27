@@ -194,3 +194,42 @@ FROM (
     FROM sow
 ) sub
 WHERE s.idsow = sub.idsow;
+
+
+--script order --
+CREATE MATERIALIZED VIEW "order" AS
+SELECT
+    order_no,
+    MIN(ssbr_id) AS ssbr_id,
+    MIN(part_number) AS part_number,
+    MIN(part_name) AS part_name,
+    MIN(model) AS model,
+    MIN(customer) AS customer,
+    MIN(location) AS location,
+    MIN(status) AS status,
+    MIN("group") AS "group",
+    MIN(systemstatus) AS systemstatus,
+    SUM(planhours) AS planhours
+FROM sow
+GROUP BY order_no;
+
+REFRESH MATERIALIZED VIEW "order";
+
+
+----- script auto delete -----
+CREATE OR REPLACE FUNCTION fn_delete_dup_sow()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM sow
+    WHERE codenumber = NEW.codenumber
+      AND order_no IS NOT NULL
+      AND idsow < NEW.idsow;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+-- trigger
+CREATE TRIGGER trg_delete_dup_sow
+AFTER INSERT ON sow
+FOR EACH ROW
+EXECUTE FUNCTION fn_delete_dup_sow();

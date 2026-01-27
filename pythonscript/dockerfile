@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    pandas \
+    psycopg2-binary \
+    python-dotenv \
+    filelock
+
+
+COPY export_csv.py .
+
+CMD ["python", "export_csv.py"]
