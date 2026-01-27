@@ -99,6 +99,7 @@ services:
       - DB_PORT=5432
     volumes:
       - ./export:/data/export
+      - ./pythonscript:/app
     depends_on:
       db:
         condition: service_healthy
