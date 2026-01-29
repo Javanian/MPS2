@@ -44,7 +44,7 @@ router.get("/mesin/:order", controller.getbymesinid);
 router.get("/csv/", controller.getcsv);
 router.get("/csv/:order_no", controller.getcsvbyid);
 router.get("/:order", controller.getById); // INI HARUS PALING BAWAH!
-router.get("/search/:ssbr_id/:group", controller.getBySSBRAndGroup);
+router.get("/search/:order_no/:operation_no", controller.getBySSBRAndGroup);
 router.post("/", controller.create);
 router.post("/createex/", controller.createexcel);
 router.post("/upsert", controller.upsert);
